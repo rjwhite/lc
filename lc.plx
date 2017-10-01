@@ -413,6 +413,8 @@ This lists the contents of all sub-directories of the current directory.
 
 Symbolic links are normally followed, and each prints under the category
 of the type  of thing  to which it is linked.  If the symbolic link
-points to a nonexistent pathname, or if you do not have permission to reso
+points to a nonexistent pathname, or if you do not have permission to
+resolve the pathname, lc will list the link under the category
+"Unresolved Symbolic Links".
 
 =cut
