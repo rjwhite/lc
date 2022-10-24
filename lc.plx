@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 
 # lc - list directory and file names in columns
-# lc [ -fdbcspan1 ] [ directory ... ]
+# lc [ -fdbcspan1vh ] [ directory ... ]
 #
 # I have tried to mimic the behaviour of lc from the 30 year old lc.c
 # version I have from the Univesity of Waterloo, fixing some bugs, and
@@ -18,7 +18,7 @@
 # Perl installation
 #
 # RJ White
-# rj@moxad.com
+# rj.white@moxad.com
 
 
 use warnings ;
@@ -28,6 +28,7 @@ use File::Spec ;
 my $progname   = $0 ;
 $progname      =~ s/^.*\/// ;
 
+my $version = 'v0.3' ;
 # want to search for some modules at runtime instead of compile time
 # If we do a "use <module>;" and it doesn't exist, our program
 # will bomb.  Do the equivalent at run-time.
@@ -122,7 +123,7 @@ for ( my $i = 0 ; $i <= $#ARGV ; $i++ ) {
                 # print files
                 $things_print_flags |= $C_PRINT_FILES ;
             } elsif ( $opt eq "d" ) {
-                # print diretories
+                # print directories
                 $things_print_flags |= $C_PRINT_DIRS ;
             } elsif ( $opt eq "c" ) {
                 # print Character special files
@@ -145,6 +146,12 @@ for ( my $i = 0 ; $i <= $#ARGV ; $i++ ) {
                 # dont print anything
                 $ok_to_print_flag = 0 ;
                 $one_per_line_flag++ ;
+            } elsif ( $opt eq "v" ) {
+                print "version: $version\n" ;
+                exit(0) ;
+            } elsif ( $opt eq "h" ) {
+                usage() ;
+                exit(0) ;
             } else {
                 printf STDERR "$progname: Unknown flag: $opt\n" ;
                 $num_errs++ ;
@@ -354,6 +361,25 @@ sub load_modules {
     }
 }
 
+
+sub usage {
+    print "usage: [ -option ]* [ directory ]*\n" .
+        "    a    print special entries as well\n" .
+        "    b    list block special files\n" .
+        "    c    list character special files\n" .
+        "    d    list directories\n" .
+        "    f    list ordinary files\n" .
+        "    h    print usage and exit\n" .
+        "    n    turn off all output\n" .
+        "    p    list permanent pipes\n" .
+        "    s    list all special files\n" .
+        "    v    print version and exit\n" .
+        "    1    print 1 entry per line\n" ;
+
+    return(0) ;
+}
+
+
 __END__
 =head1 NAME
 
@@ -361,14 +387,14 @@ lc - list directory and file names in columns
 
 =head1 SYNOPSIS
 
-lc [ -fdbcspan1 ] [ directory ... ]
+lc [ -fdbcspan1hv ] [ directory ... ]
 
 =head1 DESCRIPTION
 
 Lc  lists the elements of the given directories.  The elements are divided
 into the five basic types (files, directories, character  special  files,
 block  special  files,  and pipes)  and  are  printed in alphabetical
-order.  They are normally printed 5 to a line, preceeded by a title
+order.  They are normally printed 5 to a line, preceded by a title
 indicating the type, but the -1 option can be used to force single-column
 untitled output.
 
@@ -388,24 +414,36 @@ status is wanted.  (The exit status is 0 if something would have been
 printed, 1 otherwise.)
 
 If any of the following option arguments  are  given,  lc  lists  only
-those  types  of entries; otherwise, all entries are listed.  The options
-and their meanings are:
+those  types  of entries; otherwise, all entries are listed.
+The options and their meanings are:
 
-    f      list ordinary files
+    b    list block special files
+    c    list character special files
+    d    list directories
+    f    list ordinary files
+    n    turn off all output
+    p    list permanent pipes
+    s    list all special files
 
-    d      list directories
+The following additional options have been added:
 
-    b      list block special files
+    h    print usage and exit
+    v    print version and exit
 
-    c      list character special files
+Options may be given separately or combined.  For example, the following
+are all equivalent:
 
-    s      list all special files
-
-    p      list permanent pipes
+    lc -b -p -c
+    lc -bp -c
+    lc -bpc
 
 Lc may be used with the substitution features of the Shell to select
 particular kinds of files (eg, directories) to take part in some
 processing, for example:
+
+for example:
+
+    ls -l `lc -1d`
 
 This lists the contents of all sub-directories of the current directory.
 

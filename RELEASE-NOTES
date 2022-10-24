@@ -1,0 +1,14 @@
+0.1     May 2 2015:
+    Initial version
+
+0.2     Oct 1 2017:
+    added man-page, LICENSE.txt, missing perldoc info
+
+0.3     Oct 24, 2022:
+    - added RELEASE-NOTES
+    - added a Makefile
+    - over-hauled usage.  added -h (help) option.
+    - added -v (version) option
+    - changed LICENCE.txt from GNU General Public License to MIT
+    - updated README.md.  more info and examples given
+    - updated man-page to specify that -v and -h have been added
