@@ -1,5 +1,5 @@
 # lc - a ls alternative
-lc (list catalog) is a alternate to ls which separates files, directories, and
+lc (list catalog) is an alternate to ls which separates files, directories, and
 other special file types.
 
 ## Description
@@ -13,7 +13,7 @@ on the man-page and the behavior of the original UNIX version lc command.
 lc separates out directories, special files, ordinary files, etc.
 It dynamically loads modules, if available, to better handle line-lengths
 of the terminal window.  It would prefer that the following modules be installed
-that be be obtained at CPAN:
+that can be obtained from CPAN:
 
         Term::ReadKey  
         IO::Interactive
@@ -33,7 +33,7 @@ than the man-page.
        .git           
    
        Files:
-       README.md   LICENSE.txt  README.md   RELEASE-NOTES    lc.1     lc.plx
+       LICENSE.txt  README.md   RELEASE-NOTES    lc.1     lc.plx
 
     # options can be grouped together.  ie: -p and -b can also be given as -pb
     server5> lc -pb /dev
