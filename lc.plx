@@ -3,8 +3,8 @@
 # lc - list directory and file names in columns
 # lc [ -fdbcspan1vh ] [ directory ... ]
 #
-# I have tried to mimic the behaviour of lc from the 30 year old lc.c
-# version I have from the Univesity of Waterloo, fixing some bugs, and
+# I have tried to mimic the behaviour of lc from the old UNIX lc.c
+# version I have from the University of Waterloo, fixing some bugs, and
 # slightly changed some behavior.  However, not torture-tested nor testing
 # all behaviour of old C-version lc (of which I've not looked at the source)
 # Best test of it is to point it off to /dev which has lots of
@@ -28,7 +28,7 @@ use File::Spec ;
 my $progname   = $0 ;
 $progname      =~ s/^.*\/// ;
 
-my $version = 'v0.3' ;
+my $version = 'v0.4' ;
 # want to search for some modules at runtime instead of compile time
 # If we do a "use <module>;" and it doesn't exist, our program
 # will bomb.  Do the equivalent at run-time.
@@ -39,50 +39,43 @@ my @things_we_need = (
 ) ;
 my $got_things_we_need = load_modules( \@things_we_need ) ;
 
-my $COLUMNS             = 5 ;
-my $COLUMN_SIZE         = 15 ;
-
-my $C_DIRECTORIES       = 0 ;
-my $C_FILES             = 1 ;
-my $C_BLOCK_SPEC_FILES  = 2 ;
-my $C_CHAR_SPEC_FILES   = 3 ;
-my $C_SOCKETS           = 4 ;
+my $COLUMN_SIZE         = 14 ;
 
 # flags for printing specific thingies.  Or'ed together
 my $C_PRINT_DIRS        = 1 ;
 my $C_PRINT_FILES       = 2 ;
-my $C_PRINT_BLOCK_SPEC  = 4 ;
-my $C_PRINT_CHAR_SPEC   = 8 ;
-my $C_PRINT_SOCKETS     = 16 ;
+my $C_PRINT_PIPES       = 4 ;
+my $C_PRINT_BLOCK_SPEC  = 8 ;
+my $C_PRINT_CHAR_SPEC   = 16 ;
 my $C_PRINT_SYMLINKS    = 32 ;
-my $C_PRINT_PIPES       = 64 ;
+my $C_PRINT_SOCKETS     = 64 ;
 
 my @directories         = () ;
 my @files               = () ;
+my @pipes               = () ;
 my @block_spec          = () ;
 my @char_spec           = () ;
-my @sockets             = () ;
-my @pipes               = () ;
 my @unsatisfied         = () ;
+my @sockets             = () ;
 
 my @things    = (
     \@directories,
     \@files,
+    \@pipes,
     \@block_spec,
     \@char_spec,
-    \@sockets,
-    \@pipes,
     \@unsatisfied,
+    \@sockets,
 ) ;
 
 my @things_title = (
     "Directories:\n",
     "Files:\n",
+    "Pipes:\n",
     "Block Spec. Files:\n",
     "Char. Spec. Files:\n",
-    "Sockets:\n",
-    "Pipes:\n",
     "Unsatisfied Symbolic Links:\n",
+    "Sockets:\n",
 ) ;
 
 # Flags OR'ed together to determine what to print.  
@@ -92,18 +85,18 @@ my $things_print_flags = 0 ;
 my @things_print_flag = (
     $C_PRINT_DIRS,
     $C_PRINT_FILES,
+    $C_PRINT_PIPES,
     $C_PRINT_BLOCK_SPEC,
     $C_PRINT_CHAR_SPEC,
+    $C_PRINT_SYMLINKS,
     $C_PRINT_SOCKETS,
-    $C_PRINT_PIPES,
-    $C_PRINT_SYMLINKS
 ) ;
 
-my $one_per_line_flag      = 0 ;
-my $print_all_flags        = 0 ;
-my $ok_to_print_flag       = 1 ;
-my $fcounter               = 0 ;
-my $indent                 = "" ;
+my $one_per_line_flag      = 0 ;    # if option -1 given
+my $print_all_flags        = 0 ;    # if option -a given
+my $ok_to_print_flag       = 1 ;    # print if option -n NOT given
+my $fcounter               = 0 ;    # non-zero if something would print
+my $indent                 = "" ;   # indent if multiple directories given
 my @directory_args         = () ;
 
 # process options
@@ -199,7 +192,7 @@ if ( $got_things_we_need ) {
 $term_width -= length( $indent ) ;
 
 # figure out how many columns we have available for printing
-my $total_columns = int( $term_width / $COLUMN_SIZE ) ;
+my $total_columns = int( $term_width / ( $COLUMN_SIZE + 1 )) ;
 
 my $column_count = 0 ;
 foreach my $dir ( @directory_args ) {
@@ -208,11 +201,11 @@ foreach my $dir ( @directory_args ) {
 
         @directories    = () ;
         @files          = () ;
+        @pipes          = () ;
         @block_spec     = () ;
         @char_spec      = () ;
-        @sockets        = () ;
-        @pipes          = () ;
         @unsatisfied    = () ;
+        @sockets        = () ;
 
         while ( my $f = readdir( DIR )) {
             if ( $print_all_flags == 0 ) {
@@ -247,70 +240,66 @@ foreach my $dir ( @directory_args ) {
         my $index = 0 ;
         my $printed_something = 0 ;
         foreach my $thing ( @things ) {
-            my $num_cols = 0 ;
             $index++ ;
-            my $pr_flag = $things_print_flag[ $index-1 ] ;
+            # see if we want this filetype
 
-            next if ((  $things_print_flags & $pr_flag ) != $pr_flag );
+            my $pr_flag = $things_print_flag[ $index-1 ] ;
+            next if (( $things_print_flags & $pr_flag ) != $pr_flag );
+
+            # if we found some stuff for this filetype
 
             my $size = @$thing ;
             if ( $size ) {
-
-                if (( $one_per_line_flag == 0 ) and
-                    ( $ok_to_print_flag )) {
-                    print "\n" if ( $printed_something ) ;
-                    print "$indent$things_title[ $index-1 ]" ;
+                if ( $ok_to_print_flag ) {
+                    if ( $one_per_line_flag == 0 ) {
+                        print "\n" if ( $printed_something ) ;
+                        print "$indent$things_title[ $index-1 ]" ;
+                    } else {
+                        print "\n" if ( $printed_something ) ;
+                    }
                 }
                 $printed_something++ ;
-                my $entry_num = 0 ;
-                my $need_newline ;
-                foreach my $d ( sort( @$thing )) {
+
+                my $print_line = "" ;
+                my $print_line_len = 0 ;
+                my $min_width_needed = $COLUMN_SIZE + 1 ;  # +1 for space
+
+                foreach my $item ( sort( @$thing )) {
                     if ( $one_per_line_flag ) {
-                        print "$d\n" if ( $ok_to_print_flag );
+                        print "$item\n" if ( $ok_to_print_flag );
                         $fcounter++ ;
                         next ;
                     }
 
-                    my $squeezed_in = 0 ;
-                    my $len = length( $d ) ;
+                    my $item_len = length( $item ) ;
+                    # add on whatever spacing needed to line up with column
 
-                    # need at least a space between
-                    $len++ ;
+                    my $num_columns = int( $item_len / $min_width_needed ) + 1  ;
+                    my $spaces_needed = ( $num_columns * $min_width_needed ) - $item_len ;
+                    $item .= ' ' x $spaces_needed ;
 
-                    my $num_widths = int( $len / $COLUMN_SIZE ) ;
-                    $num_widths++ if (($len % $COLUMN_SIZE ) != 0);
-                    my $column_size = $num_widths * $COLUMN_SIZE ;
+                    $item_len = length( $item ) ;
 
-                    $num_cols += $num_widths ;
-                    # check to see if enough room
-                    if ( $num_cols > $total_columns ) {
-                        if (( ( $num_cols - $num_widths ) * $COLUMN_SIZE ) + $len ) {
-                            print "\n" ;
-                            $num_cols = $num_widths ;
-                            $entry_num = 0 ;
-                        } else {
-                            $column_size = $len ;
-                            $squeezed_in = 1 ;
-                        }
-                    }
-                    $entry_num++ ;
-                    print "$indent" if ( $entry_num == 1 ) ;
-                    my $val = sprintf( "%-${column_size}s", $d );
-                    if ( $num_cols >= $total_columns ) {
-                        $val =~ s/\s+$// ;
-                    }
-                    print "$val" ;
-                    next if ( $squeezed_in ) ;
+                    if (( $print_line_len + $item_len ) < $term_width ) {
+                        # we have room to add to this line
+                        $print_line = $print_line . $item ;
+                        $print_line_len = length( $print_line ) ;
+                    } else {
+                        # print the line and reset
+                        $print_line =~ s/\s+$// ;        # strip trailing spaces
+                        print "$indent$print_line\n" ;
 
-                    $need_newline = 1 ;
-                    if ( $num_cols == $total_columns ) {
-                        print "\n" ;
-                        $need_newline = 0 ;
-                        $num_cols     = 0 ;
-                        $entry_num    = 0 ;
+                        $print_line = $item ;
+                        $print_line_len = $item_len ;
+                        $fcounter++ ;
                     }
                 }
-                print "\n" if ( $need_newline ) ;
+                # print last lingering data collected
+                if ( $print_line ne "" ) {
+                    $print_line =~ s/\s+$// ;        # strip trailing spaces
+                    print "$indent$print_line\n" ;
+                    $fcounter++ ;
+                }
             }
         }
     } else {
@@ -364,7 +353,7 @@ sub load_modules {
 
 sub usage {
     print "usage: [ -option ]* [ directory ]*\n" .
-        "    a    print special entries as well\n" .
+        "    a    print special entries as well (. and ..)\n" .
         "    b    list block special files\n" .
         "    c    list character special files\n" .
         "    d    list directories\n" .

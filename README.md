@@ -18,8 +18,10 @@ that can be obtained from CPAN:
         Term::ReadKey  
         IO::Interactive
 
-The behavior of this Perl version is the same as the original UW lc version
-except for the usage which has been made more friendly and with a added version option.
+The behavior of this Perl version is similar to the original UW lc version
+except for the usage which has been made more friendly, a version option added,
+and there are a few options that original version has that are not imlemented 
+here (like special MPX Microsoft file types)
 
 The original man page for the UW lc has been included but the C code version is not,
 since it's unclear if that would violate the University of Waterloo copyright.
@@ -50,7 +52,7 @@ than the man-page.
     # usage (help option)
     server5> lc -h
        usage: [ -option ]* [ directory ]*
-           a    print special entries as well
+           a    print special entries as well (. and ..)
            b    list block special files
            c    list character special files
            d    list directories

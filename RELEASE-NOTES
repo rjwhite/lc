@@ -17,3 +17,18 @@
     - fixed some typos in README.md
     - fixed an issues with the lc.1 man-page not displaying an example
       correctly
+
+0.4     Oct 31, 2022:
+    lc.plx:
+        - total overhaul in handling print formatting to address issue #1 from
+          Ian! Allen: "differing output compared with 2005 UW version in C"
+          It still will only have a max of 14 chars per column to be consistent
+          will all columns - not just the last one - but the code has been
+          totally overhauled to be clearer.
+        - changed order of filetypes printed to be consistent with original lc
+        - include extra newline between filetypes when used with option -1 to
+          to be consistent with original version
+        - code refactoring.
+    README.md:
+        - made more clear that the behaviour is based on the original lc and
+          is not guaranteed to be identical behaviour
