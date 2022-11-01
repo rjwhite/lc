@@ -23,7 +23,7 @@
         - total overhaul in handling print formatting to address issue #1 from
           Ian! Allen: "differing output compared with 2005 UW version in C"
           It still will only have a max of 14 chars per column to be consistent
-          will all columns - not just the last one - but the code has been
+          with all columns - not just the last one - but the code has been
           totally overhauled to be clearer.
         - changed order of filetypes printed to be consistent with original lc
         - include extra newline between filetypes when used with option -1 to
@@ -32,3 +32,10 @@
     README.md:
         - made more clear that the behaviour is based on the original lc and
           is not guaranteed to be identical behaviour
+
+0.5     Nov 1, 2022:
+    lc.plx:
+        - over-hauled in handling print formatting again.  If there is room to
+          squeeze in an entry in the last column even if is is slightly longer
+          than the 14 character width, then go for it so long as it is within
+          the terminal width.  More aesthetically pleasing.

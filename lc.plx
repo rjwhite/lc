@@ -28,7 +28,7 @@ use File::Spec ;
 my $progname   = $0 ;
 $progname      =~ s/^.*\/// ;
 
-my $version = 'v0.4' ;
+my $version = 'v0.5' ;
 # want to search for some modules at runtime instead of compile time
 # If we do a "use <module>;" and it doesn't exist, our program
 # will bomb.  Do the equivalent at run-time.
@@ -272,28 +272,42 @@ foreach my $dir ( @directory_args ) {
                     }
 
                     my $item_len = length( $item ) ;
-                    # add on whatever spacing needed to line up with column
+                    $print_line_len = length( $print_line ) ;
 
-                    my $num_columns = int( $item_len / $min_width_needed ) + 1  ;
-                    my $spaces_needed = ( $num_columns * $min_width_needed ) - $item_len ;
-                    $item .= ' ' x $spaces_needed ;
+                    # in both the if and the else, we repeat code for adding
+                    # the number of spaces.  We do it this way *after* we
+                    # calculate if we have enough room, so we can squeeze an
+                    # over-sized item at the end of the line if there is
+                    # enough room.  We aren't putting this into a subroutine
+                    # for performance reasons.
 
-                    $item_len = length( $item ) ;
-
-                    if (( $print_line_len + $item_len ) < $term_width ) {
+                    if ((( $print_line_len + $item_len ) < $term_width ) and
+                       (( $term_width - $print_line_len ) > ( $COLUMN_SIZE + 1 ))) {
                         # we have room to add to this line
-                        $print_line = $print_line . $item ;
+
+                        # add on whatever spacing needed to line up with column
+                        my $num_columns = int( $item_len / $min_width_needed ) + 1  ;
+                        my $spaces_needed = ( $num_columns * $min_width_needed ) - $item_len ;
+                        $print_line .= $item . ' ' x $spaces_needed ;
+
                         $print_line_len = length( $print_line ) ;
                     } else {
                         # print the line and reset
                         $print_line =~ s/\s+$// ;        # strip trailing spaces
-                        print "$indent$print_line\n" ;
+                        print "$indent$print_line\n" ;   # print it
 
-                        $print_line = $item ;
+                        $print_line = $item ;            # set our new column
                         $print_line_len = $item_len ;
+
+                        # add on whatever spacing needed to line up with column
+                        my $num_columns = int( $item_len / $min_width_needed ) + 1  ;
+                        my $spaces_needed = ( $num_columns * $min_width_needed ) - $item_len ;
+                        $print_line = $item . ' ' x $spaces_needed ;
+
                         $fcounter++ ;
                     }
                 }
+
                 # print last lingering data collected
                 if ( $print_line ne "" ) {
                     $print_line =~ s/\s+$// ;        # strip trailing spaces
