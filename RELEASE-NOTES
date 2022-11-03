@@ -39,3 +39,8 @@
           squeeze in an entry in the last column even if is is slightly longer
           than the 14 character width, then go for it so long as it is within
           the terminal width.  More aesthetically pleasing.
+
+0.6     Nov 3, 2022:
+    lc.plx:
+        - refactoring.  getting all line lengths < 80 chars
+        - the handling of the spacing is smarter now.

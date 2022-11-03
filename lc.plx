@@ -5,21 +5,17 @@
 #
 # I have tried to mimic the behaviour of lc from the old UNIX lc.c
 # version I have from the University of Waterloo, fixing some bugs, and
-# slightly changed some behavior.  However, not torture-tested nor testing
-# all behaviour of old C-version lc (of which I've not looked at the source)
-# Best test of it is to point it off to /dev which has lots of
-# different file-types.
+# slightly changed some behavior.  
 #
-# Written so I'd have a Windows version and to have a quick
-# working version when I set up a new *nix system.
+# Written so I'd have a Windows version under Unix tool packages like
+# cygwin and to have a quick working version when I set up a new *nix system.
 #
 # requires CPAN Term::ReadKey to handle window resizing.
 # Also needs IO::Interactive which no longer seems to be part of a default
-# Perl installation
+# Perl installation.  Otherwise it defaults to a 80-char terminal size.
 #
 # RJ White
 # rj.white@moxad.com
-
 
 use warnings ;
 use strict ;
@@ -28,7 +24,7 @@ use File::Spec ;
 my $progname   = $0 ;
 $progname      =~ s/^.*\/// ;
 
-my $version = 'v0.5' ;
+my $version = 'v0.6' ;
 # want to search for some modules at runtime instead of compile time
 # If we do a "use <module>;" and it doesn't exist, our program
 # will bomb.  Do the equivalent at run-time.
@@ -176,6 +172,8 @@ if ( $num_entries > 1 ) {
 # go get the terminal width size and use it
 
 my $term_width = 80 ;
+my $column_width = $COLUMN_SIZE + 1 ;
+
 if ( $got_things_we_need ) {
     my @term_size = () ;
     my $fd = *STDOUT ;
@@ -190,9 +188,6 @@ if ( $got_things_we_need ) {
 # We indent if printing multiple directories.
 # Account for that
 $term_width -= length( $indent ) ;
-
-# figure out how many columns we have available for printing
-my $total_columns = int( $term_width / ( $COLUMN_SIZE + 1 )) ;
 
 my $column_count = 0 ;
 foreach my $dir ( @directory_args ) {
@@ -262,7 +257,6 @@ foreach my $dir ( @directory_args ) {
 
                 my $print_line = "" ;
                 my $print_line_len = 0 ;
-                my $min_width_needed = $COLUMN_SIZE + 1 ;  # +1 for space
 
                 foreach my $item ( sort( @$thing )) {
                     if ( $one_per_line_flag ) {
@@ -274,38 +268,24 @@ foreach my $dir ( @directory_args ) {
                     my $item_len = length( $item ) ;
                     $print_line_len = length( $print_line ) ;
 
-                    # in both the if and the else, we repeat code for adding
-                    # the number of spaces.  We do it this way *after* we
-                    # calculate if we have enough room, so we can squeeze an
-                    # over-sized item at the end of the line if there is
-                    # enough room.  We aren't putting this into a subroutine
-                    # for performance reasons.
-
                     if ((( $print_line_len + $item_len ) < $term_width ) and
-                       (( $term_width - $print_line_len ) > ( $COLUMN_SIZE + 1 ))) {
+                       (( $term_width - $print_line_len ) > $column_width )) {
+
                         # we have room to add to this line
-
-                        # add on whatever spacing needed to line up with column
-                        my $num_columns = int( $item_len / $min_width_needed ) + 1  ;
-                        my $spaces_needed = ( $num_columns * $min_width_needed ) - $item_len ;
-                        $print_line .= $item . ' ' x $spaces_needed ;
-
-                        $print_line_len = length( $print_line ) ;
+                        $print_line .= $item ;      # add item to what we have
                     } else {
-                        # print the line and reset
-                        $print_line =~ s/\s+$// ;        # strip trailing spaces
-                        print "$indent$print_line\n" ;   # print it
+                        # no room to add more.  print the line and reset
+                        $print_line =~ s/\s+$// ;   # strip trailing spaces
+                        print "$indent$print_line\n" ;
 
-                        $print_line = $item ;            # set our new column
-                        $print_line_len = $item_len ;
-
-                        # add on whatever spacing needed to line up with column
-                        my $num_columns = int( $item_len / $min_width_needed ) + 1  ;
-                        my $spaces_needed = ( $num_columns * $min_width_needed ) - $item_len ;
-                        $print_line = $item . ' ' x $spaces_needed ;
-
+                        $print_line = $item ;       # set our new column
                         $fcounter++ ;
                     }
+
+                    # add on the spaces we need to fill the column
+                    my $num_columns = int( $item_len / $column_width ) + 1  ;
+                    my $num_spaces = ( $num_columns * $column_width ) - $item_len ;
+                    $print_line .= ' ' x $num_spaces ;
                 }
 
                 # print last lingering data collected
@@ -320,14 +300,16 @@ foreach my $dir ( @directory_args ) {
         print "$dir: No such file or directory\n" ;
         next ;
     }
-    print "\n" if (( $column_count < $num_entries ) and ( $ok_to_print_flag )) ;
+    if (( $column_count < $num_entries ) and ( $ok_to_print_flag )) {
+        print "\n" ;
+    }
 }
 exit(0) if ( $fcounter ) ;
 exit(1) ;
 
 
-
 # load the modules we need
+#
 # Args:
 #   1:  reference to array of modules (this::that::blah)
 # Returns:
