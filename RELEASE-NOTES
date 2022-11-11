@@ -44,3 +44,14 @@
     lc.plx:
         - refactoring.  getting all line lengths < 80 chars
         - the handling of the spacing is smarter now.
+
+0.7     Nov 11, 2022:
+    lc.1:
+        - complete rewrite of man page.
+          moved old (mostly) UW version to lc-uw.1
+    lc.plx:
+        - now uses the environment variable LC_COLUMN_WIDTH to change column
+          width from default of 14 characters
+        - added more info to perldoc and corrected some info
+    README.md:
+        - updated

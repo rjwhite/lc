@@ -1,58 +1,74 @@
-.TH LC 1 UW
+.TH lc 1
 .SH NAME
-lc \- list directory and file names in columns
+lc \- an alternate to ls that separates directories and files
 .SH SYNOPSIS
 .B lc
 [
-.B \-fdbcspan1hv
-]
-[ directory ... ]
+.B -1abcdfhnpsv
+]* [
+directory
+]*
+.SH OPTIONS
+.TP
+\fB\-1\fR
+force single column output
+.TP
+\fB\-a\fR
+list special entries as well (. and ..)
+.TP
+\fB\-b\fR
+list block special files
+.TP
+\fB\-c\fR
+list character special files
+.TP
+\fB\-d\fR
+list directories
+.TP
+\fB\-f\fR
+list ordinary files
+.TP
+\fB\-h\fR
+help.  show the usage
+.TP
+\fB\-n\fR 
+turns off all output
+.TP
+\fB\-p\fR 
+list permanent pipes
+.TP
+\fB\-s\fR
+list all special files - character and block special files
+.TP
+\fB\-v\fR
+show version of program
+.SH EXAMPLES
+.TP
+lc -cb /dev
+list the character and block files in /dev
 .SH DESCRIPTION
-What follows is the original UW man-page for the C version of lc.
-The \-h (help) and \-v (version) has been added to the Perl version
-found in github.com/rjwhite/lc
+.I lc
+originally came from the University of Waterloo, on a Honeywell GECOS
+system where it was written in B.  From there it migrated to Unix at UW,
+written in C.  This version is written in Perl and mimics the behaviour
+of the original (but is not guaranteed to be identical).  There are a
+few special options and file-types it does not implement - like MPX
+Microsoft file types.  This Perl version will also work on Windows using
+Unix tool environments like Cygwin.
 .PP
-.I Lc
-lists the elements of the given directories.
-The elements are
-divided into the five basic types (files, directories, character
-special files, block special files, and pipes)
-and are printed in alphabetical order.
-They are normally printed 5 to a line,
-preceded by a title indicating the type,
-but the
-.B \-1
-option can be used to force single-column untitled output.
+.I lc
+lists the elements of the given directories.  The elements are
+divided into the basic types  (files,  directories, character
+special files, block special files, and pipes) and are printed in
+alphabetical order within each type.
+If  no  argument is given, the current working directory is used by default.
 .PP
-If no argument is given, the current working directory is used by default.
-The contents of all directories named in the argument list are displayed.
-while all other names (i.e. non-directories) are ignored.
-This feature allows one to use a shell's pattern matching abilities to
-generate the arguments without having to worry about non-directory names
-that might also be matched (e.g.
-.CQ "lc ~/*"
-would do an lc of all the non-hidden directories in one's home directory).
-.PP
-The special entries
-.Q .
-and
-.Q ..
-are normally not listed;
-the
-.B \-a
-option causes them to be listed as well.
-.PP
-The
-.B \-n
-option turns off all output; this is useful when only the exit status is
-wanted.
-(The exit status is 0 if something would have been printed,
-1 otherwise.)
+The special entries \fB.\fR and \fB..\fP are normally not listed.
+The \fB\-a\fP option causes them to be listed as well.
 .PP
 If any of the following option arguments are given,
 .I lc
-lists only those types of entries;
-otherwise, all entries are listed.
+lists only those types of entries; otherwise, all entries are listed.
 The options and their meanings are:
 .PP
 .RS 5n
@@ -76,7 +92,22 @@ list all special files
 list permanent pipes
 .RE
 .PP
-.I Lc
+If you use the -1 (One, not L), it will list one entry per line.  To be
+consistent with the original C version, it will leave a blank line between
+file-types.  ie: There will be a blank line between Files listed and
+Directories listed.
+.PP
+The
+.B \-n
+option turns off all output; this is useful when only the exit status is
+wanted.  The exit status is 0 if something would have been printed,
+1 otherwise.
+.PP
+Options in this Perl version can be concatenated together, or listed separately.  
+.br
+ie: \fB lc -cb /dev\fP and \fBlc -c -b /dev\fP are equivalent.
+.PP
+.I lc
 may be used with the substitution features of the Shell
 to select particular kinds of files (eg, directories) to
 take part in some processing,
@@ -84,14 +115,41 @@ for example:
 .ti +5
 .sp
 ls \-l \`lc -1d\`
-.sp
 .PP
-This lists the contents of all sub-directories of the current directory.
-.SH DIAGNOSTICS
 Symbolic links are normally followed, and each prints under the category
 of the type of thing to which it is linked.
 If the symbolic link points to a nonexistent pathname, or if you do
 not have permission to resolve the pathname,
 .I lc
 will list the link under the category
-.IR "Unresolved Symbolic Links" .
+.IR "Unsatisfied Symbolic Links".
+.SH COLUMN WIDTH
+This version by default uses the same 14 character names with one space
+between them, as did the original version.  The last item can have more
+than 14 characters if there is enough space within the total terminal
+width.  It will try to dynamically load the modules Term::ReadKey and
+IO::Interactive, if they exist, to figure out and set the terminal width.
+Otherwise it assumes a default terminal width of 80 characters.
+This means that the default listing has 5 columns with a bit extra
+space for slightly longer names in the last column.
+.br
+(14 filename + 1 space) * 5 columns = 75 characters, which is less than 80.
+.PP
+It is recommended that you fetch and install those modules from CPAN (Term::ReadKey
+and Interactive), to make use of terminal windows wider than 80 characters so
+you can have more columns.
+.PP
+You can change the default width of the column from 14 characters
+by setting the environment variable LC_COLUMN_WIDTH.
+.SH ENVIRONMENT VARIABLES
+.I LC_COLUMN_WIDTH 
+can be set to change the default 14 character width
+of items to be printed.  It can be between (and including) 10 and
+30 characters, by setting the environment variable LC_COLUMN_WIDTH.
+This does not exist with the original B and C versions.
+.SH AUTHOR
+RJ White
+.br
+rj.white@moxad.com
+.br
+Moxad Enterprises Inc.

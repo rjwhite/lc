@@ -24,7 +24,7 @@ use File::Spec ;
 my $progname   = $0 ;
 $progname      =~ s/^.*\/// ;
 
-my $version = 'v0.6' ;
+my $version = 'v0.7' ;
 # want to search for some modules at runtime instead of compile time
 # If we do a "use <module>;" and it doesn't exist, our program
 # will bomb.  Do the equivalent at run-time.
@@ -35,7 +35,7 @@ my @things_we_need = (
 ) ;
 my $got_things_we_need = load_modules( \@things_we_need ) ;
 
-my $COLUMN_SIZE         = 14 ;
+my $COLUMN_SIZE         = 14 ;      # original lc (need to +1 for separator)
 
 # flags for printing specific thingies.  Or'ed together
 my $C_PRINT_DIRS        = 1 ;
@@ -45,6 +45,9 @@ my $C_PRINT_BLOCK_SPEC  = 8 ;
 my $C_PRINT_CHAR_SPEC   = 16 ;
 my $C_PRINT_SYMLINKS    = 32 ;
 my $C_PRINT_SOCKETS     = 64 ;
+
+my $C_MIN_WIDTH         = 10 ;
+my $C_MAX_WIDTH         = 30 ;
 
 my @directories         = () ;
 my @files               = () ;
@@ -172,7 +175,15 @@ if ( $num_entries > 1 ) {
 # go get the terminal width size and use it
 
 my $term_width = 80 ;
-my $column_width = $COLUMN_SIZE + 1 ;
+my $column_width = $COLUMN_SIZE + 1 ;   # default
+
+# see if we want a different column width
+
+my $width = $ENV{ 'LC_COLUMN_WIDTH' } ;
+if (( defined( $width )) and ( $width =~ /^\d+$/ ) and
+    ( $width >= $C_MIN_WIDTH ) and ( $width <= $C_MAX_WIDTH )) {
+        $column_width = $width + 1 ;    # +1 for space separator
+}
 
 if ( $got_things_we_need ) {
     my @term_size = () ;
@@ -432,12 +443,19 @@ for example:
 
 This lists the contents of all sub-directories of the current directory.
 
-=head1 DIAGNOSTICS
+=head1 SYMBOLIC LINKS
 
 Symbolic links are normally followed, and each prints under the category
 of the type  of thing  to which it is linked.  If the symbolic link
 points to a nonexistent pathname, or if you do not have permission to
 resolve the pathname, lc will list the link under the category
-"Unresolved Symbolic Links".
+"Unsatisfied Symbolic Links".
+
+=head1 ENVIRONMENT VARIABLES
+
+LC_COLUMN_WIDTH can be set to change the default 14 character width of
+items to be printed.  It can  be  between  (and  including)  10  and
+30 characters, by setting the environment variable LC_COLUMN_WIDTH.
+This does not exist with the original B and C versions.
 
 =cut
