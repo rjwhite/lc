@@ -20,7 +20,7 @@
 
 0.4     Oct 31, 2022:
     lc.plx:
-        - total overhaul in handling print formatting to address issue #1 from
+        - total overhaul in handling print formatting to address Issue #1 from
           Ian! Allen: "differing output compared with 2005 UW version in C"
           It still will only have a max of 14 chars per column to be consistent
           with all columns - not just the last one - but the code has been
@@ -55,3 +55,12 @@
         - added more info to perldoc and corrected some info
     README.md:
         - updated
+
+0.8     Nov 26, 2022:
+    lc.plx:
+        - now has a mainline, reducing globals to $G_progname and $G_version
+        - added an error() function with flag for whether to exit or not
+        - prints useful error messages if LC_COLUMN_WIDTH is wrong (Issue #2)
+        - wasn't printing command for usage (-h)
+        - no such pathname now treated like any other error - to STDERR
+        - refactoring, more/better comments
