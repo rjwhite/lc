@@ -9,7 +9,7 @@
     - added a Makefile
     - over-hauled usage.  added -h (help) option.
     - added -v (version) option
-    - changed LICENCE.txt from GNU General Public License to MIT
+    - changed LICENSE.txt from GNU General Public License to MIT
     - updated README.md.  more info and examples given
     - updated man-page to specify that -v and -h have been added
 
@@ -25,18 +25,18 @@
           It still will only have a max of 14 chars per column to be consistent
           with all columns - not just the last one - but the code has been
           totally overhauled to be clearer.
-        - changed order of filetypes printed to be consistent with original lc
-        - include extra newline between filetypes when used with option -1 to
+        - changed order of file-types printed to be consistent with original lc
+        - include extra newline between file-types when used with option -1 to
           to be consistent with original version
         - code refactoring.
     README.md:
-        - made more clear that the behaviour is based on the original lc and
-          is not guaranteed to be identical behaviour
+        - made more clear that the behavior is based on the original lc and
+          is not guaranteed to be identical behavior
 
 0.5     Nov 1, 2022:
     lc.plx:
         - over-hauled in handling print formatting again.  If there is room to
-          squeeze in an entry in the last column even if is is slightly longer
+          squeeze in an entry in the last column even if it is slightly longer
           than the 14 character width, then go for it so long as it is within
           the terminal width.  More aesthetically pleasing.
 
@@ -64,3 +64,49 @@
         - wasn't printing command for usage (-h)
         - no such pathname now treated like any other error - to STDERR
         - refactoring, more/better comments
+
+0.9     Nov 30, 2022:
+    lc.plx:
+        - better error reporting when directory fails to open (no perms, etc)
+        - better memory management - only store filename if we want that type
+        - total redesign, several new subroutines to break up huge mainline
+        - new subroutines: process_options(), get_file_type(), process_dirs(),
+          get_term_width(), get_column_width(), print_version()
+        - process_options() totally overhauls how command-line options are
+          handled.  No longer just a BigAss cascading if-then-else statements
+        - updated regular expression usage to add /x to shut up perlcritic
+        - now passes level 3 (harsh) checks by perlcritic.
+          Before it only passed levels 4 (stern) and 5 (gentle).
+          Although now disabling perlcritic check of ProhibitExcessComplexity
+          in process_dirs() which scores 31 (above the default value of 20)
+          in level 3 (harsh).  Previously main() scored 63 before simplifying.
+        - no longer prints *anything* if -n used.  Before it printed top-level
+          directory headings when more than 1 directory given.
+        - added new option -S for listing sockets (-s was already taken)
+    lc.1:
+        - added -S (sockets)
+        - clarified that -s (special) means -b and -c, and not confused with
+          the special files of -a (. and ..)
+    README.md:
+        - minor updates of examples.
+
+    It's ironic that in an experiment to remove the perlcritic complaints
+    about excess complexity and cascading if-then-else, the result is
+    now a complicated process_options().  Not sure how I feel about this.
+    The cascading if-then-else of command-line processing may be considered
+    ugly by some - but it is easy to understand. The guts of process_options()
+    can always be changed back to use if-then-else later if desired.  But the
+    new structure did make it trivial to add the new option -S.  Just one line:
+        'S' => [ $C_ACTION_SET_FLAG, $print_ref, $C_SOCKETS ],
+    And then just add one extra line for the usage().
+    It also made it easier and cleaner to implement -s (special files):
+        's' => [ $C_ACTION_SET_FLAG, $print_ref, $C_CHAR_SPEC, $C_BLOCK_SPEC ],
+    So I think I'll keep it (for now...)
+
+    It did introduce behaviour which I normally avoid.  I normally try to
+    have a single place in a program where it can exit - after receiving
+    an error status from main().  But now you can exit from process_options()
+    when handling help (-h) and printing the version (-v):
+        'h' => [ $C_ACTION_CODE, \&usage,         $C_EXIT_YES ],
+        'v' => [ $C_ACTION_CODE, \&print_version, $C_EXIT_YES ],
+    which causes the function to run and then immediately exit.

@@ -1,14 +1,25 @@
 #!/usr/bin/env perl
 
 # lc - list directory and file names in columns
-# lc [ -fdbcspan1vh ] [ directory ... ]
+# lc [ -fdbcspan1vh ] [ directory ]*
+#
+# Written so I'd have a Windows version under Unix tool packages like
+# cygwin and to have a quick working version when I set up a new *nix system.
 #
 # I have tried to mimic the behaviour of lc from the old UNIX lc.c
 # version I have from the University of Waterloo, fixing some bugs, and
 # slightly changed some behavior.
+
+# Added some new options:
+#   -h (help)
+#   -v (version)
+#   -S (list sockets)       -s was aleady taken by original lc
+# and added as well is support for a LC_COLUMN_WIDTH environment vaiable.
 #
-# Written so I'd have a Windows version under Unix tool packages like
-# cygwin and to have a quick working version when I set up a new *nix system.
+# flag options can be grouped together, or separated - like the original lc.
+# ie: the following are equivalent:
+#    lc -fcb
+#    lc -f -cb
 #
 # requires CPAN Term::ReadKey to handle window resizing.
 # Also needs IO::Interactive which no longer seems to be part of a default
@@ -23,28 +34,35 @@ use File::Spec ;
 
 # Globals
 my $G_progname = $0 ;
-my $G_version = 'v0.8' ;
+my $G_version  = 'v0.9' ;
 
-# flags for printing specific thingies.  Or'ed together
-my $C_PRINT_DIRS        = 1 ;
-my $C_PRINT_FILES       = 2 ;
-my $C_PRINT_PIPES       = 4 ;
-my $C_PRINT_BLOCK_SPEC  = 8 ;
-my $C_PRINT_CHAR_SPEC   = 16 ;
-my $C_PRINT_SYMLINKS    = 32 ;
-my $C_PRINT_SOCKETS     = 64 ;
-
-# flags for column size
-my $C_COLUMN_SIZE       = 14 ;      # original lc (need to +1 for separator)
-my $C_MIN_WIDTH         = 10 ;
-my $C_MAX_WIDTH         = 30 ;
+# for column size
+my $C_COLUMN_SIZE = 14 ;      # original lc (need to +1 for separator)
+my $C_MIN_WIDTH   = 10 ;
+my $C_MAX_WIDTH   = 30 ;
 
 # flags for error()
-my $C_WARNING           = 0 ;
-my $C_FATAL             = 1 ;
+my $C_WARNING     = 0 ;
+my $C_FATAL       = 1 ;
+
+# flags for command-line flag options
+
+my $C_FLAG_PRINT_EVERYTHING     = 1 ;    # -a
+my $C_FLAG_DONT_PRINT_ANYTHING  = 2 ;    # -n
+my $C_FLAG_ONE_PER_LINE         = 3 ;    # -1
+
+# types of files
+my $C_DIRECTORIES = 1 ;
+my $C_FILES       = 2 ;
+my $C_PIPES       = 3 ;
+my $C_BLOCK_SPEC  = 4 ;
+my $C_CHAR_SPEC   = 5 ;
+my $C_SYMLINKS    = 6 ;
+my $C_SOCKETS     = 7 ;
+
 
 # Let er rip...
-exit(1) if ( main() ) ;
+exit(1) if ( main() ) ;     # exit 1 if any problems
 exit(0) ;
 
 
@@ -55,10 +73,373 @@ exit(0) ;
 #   1:  not OK
 # Globals:
 #   $G_progname
-#   $G_version
 
 sub main {
-    $G_progname =~ s/^.*\/// ;
+    $G_progname =~ s/ ^ .* \/ //x ;
+
+    # values get set to 1 for each file-type we are interested in printing
+    my %file_types = (
+        $C_DIRECTORIES => 0,    # -d
+        $C_FILES       => 0,    # -f
+        $C_PIPES       => 0,    # -p
+        $C_BLOCK_SPEC  => 0,    # -b, -s
+        $C_CHAR_SPEC   => 0,    # -c, -s
+        $C_SYMLINKS    => 0,    # if nothing given
+        $C_SOCKETS     => 0,    # if nothing given
+    ) ;
+
+    # values get set to 1 if flags given on command-line
+    my %options = (
+        $C_FLAG_PRINT_EVERYTHING     => 0,      # -a
+        $C_FLAG_DONT_PRINT_ANYTHING  => 0,      # -n
+        $C_FLAG_ONE_PER_LINE         => 0,      # -1
+    ) ;
+
+    # process command-line options
+
+    my @directories = () ;
+    if ( process_options( \%file_types, \%options, \@directories )) {
+        return(1) ;
+    }
+
+    # get number of things we specified we wanted from command-line options
+
+    my $num_things_we_want = 0 ;
+    my @p_keys = keys( %file_types ) ;
+    foreach my $key ( @p_keys ) {
+        $num_things_we_want += $file_types{ $key } ;
+    }
+
+    # if no specific print options were given, then give us everything
+
+    if ( $num_things_we_want == 0 ) {
+        # we want everything
+        foreach my $key ( @p_keys ) {
+            $file_types{ $key } = 1 ;
+        }
+   }
+
+    # If no directories given, default to current directory
+
+    push( @directories, "." ) if ( @directories == 0 ) ;
+
+    return( process_dirs( \@directories, \%file_types, \%options )) ;
+}
+
+
+# process command-line options
+#
+# We have a hash structure with the key being the command-line
+# option (eg: 'f' for wanting files).  The value is an anonymous
+# array.  The first element specifies either it being a routine
+# to run, or a flag to set: $C_ACTION_CODE or $C_ACTION_SET_FLAG.
+#
+# If it's code to run, the next element is the reference to the routine
+# to run with no arguments.  The next optional element is the whether
+# to exit the program after running the routine: $C_EXIT_YES or $C_EXIT_NO.
+#
+# If it's a flag to set, the next element is the hash reference
+# and the following values are the keys to use for that hash to
+# set the value to 1.
+#
+# Args:
+#   1: reference to hash of file-types we want to print
+#   2: reference to hash of flags we set
+#   3: reference to array of directories given on command-line
+# Exits
+#   number of errors found if we don't exit from FATAL error
+
+sub process_options {
+    my $print_ref = shift ;
+    my $flags_ref = shift ;
+    my $dirs_ref  = shift ;
+
+    my $i_am = (caller(0))[3] . "()" ;
+    my $num_errs = 0 ;
+
+    my $C_ACTION_CODE     = 1 ;
+    my $C_ACTION_SET_FLAG = 2 ;
+
+    my $C_EXIT_YES = 1 ;
+    my $C_EXIT_NO  = 2 ;
+
+    my %options = (
+        'b' => [ $C_ACTION_SET_FLAG, $print_ref, $C_BLOCK_SPEC ],
+        'c' => [ $C_ACTION_SET_FLAG, $print_ref, $C_CHAR_SPEC ],
+        'd' => [ $C_ACTION_SET_FLAG, $print_ref, $C_DIRECTORIES ],
+        'f' => [ $C_ACTION_SET_FLAG, $print_ref, $C_FILES ],
+        'p' => [ $C_ACTION_SET_FLAG, $print_ref, $C_PIPES ],
+        's' => [ $C_ACTION_SET_FLAG, $print_ref, $C_CHAR_SPEC, $C_BLOCK_SPEC ],
+        'a' => [ $C_ACTION_SET_FLAG, $flags_ref, $C_FLAG_PRINT_EVERYTHING ],
+        'n' => [ $C_ACTION_SET_FLAG, $flags_ref, $C_FLAG_DONT_PRINT_ANYTHING ],
+        '1' => [ $C_ACTION_SET_FLAG, $flags_ref, $C_FLAG_ONE_PER_LINE ],
+        'h' => [ $C_ACTION_CODE, \&usage, $C_EXIT_YES ],
+        'v' => [ $C_ACTION_CODE, \&print_version, $C_EXIT_YES ],
+        'S' => [ $C_ACTION_SET_FLAG, $print_ref, $C_SOCKETS ],
+    ) ;
+
+    for ( my $i = 0 ; $i <= $#ARGV ; $i++ ) {
+        if (  $ARGV[ $i ] =~ / ^- /x ) {
+            my $option = $ARGV[ $i ] ;
+            $option =~ s/ ^- //x ;
+            my @options = split( //, $option ) ;
+
+            foreach my $opt ( @options ) {
+                # see if an invalid option
+                if ( not defined( $options{ $opt } )) {
+                    error( "unknown flag: $opt", $C_WARNING ) ;
+                    $num_errs++ ;
+                    next ;
+                }
+
+                my $action = $options{ $opt }[0] ;
+                if ( $action eq $C_ACTION_CODE ) {
+                    my $ref = ref( $options{ $opt }[1] ) ;
+                    if (( not defined( $ref )) or ( $ref ne 'CODE' )) {
+                        my $err = "bad routine supplied for option \'$opt\'" ;
+                        error( "$i_am: $err", $C_FATAL ) ;
+                    }
+                    &{$options{ $opt }[1]} ;        # run routine
+                    my $exit_type = $options{ $opt }[2] ;
+                    $exit_type = $C_EXIT_NO if ( not defined( $exit_type )) ;
+                    exit(0) if ( $exit_type eq $C_EXIT_YES ) ;
+
+                } elsif ( $action eq $C_ACTION_SET_FLAG ) {
+                    my $hash_ref = $options{ $opt }[1] ;
+                    my $ref = ref( $hash_ref ) ;
+                    if (( not defined( $ref )) or ( $ref ne 'HASH' )) {
+                        my $err = "bad HASH ref supplied for option \'$opt\'" ;
+                        error( "$i_am: $err", $C_FATAL ) ;
+                    }
+                    # get the keys to use in hash to set flag
+                    my @args = @{$options{ $opt }} ;
+                    @args = @args[2..$#args] ;
+                    foreach my $key ( @args ) {
+                        ${$hash_ref}{ $key } = 1 ;  # set flag
+                    }
+                } else {
+                    error( "$i_am: unknown action: \'$action\'", $C_FATAL ) ;
+                }
+            }
+        } else {
+            push( @{$dirs_ref}, $ARGV[ $i ] ) ;     # directories we want
+        }
+    }
+    return( $num_errs ) ;
+}
+
+
+# get the file-type of a pathname
+#
+# Args:
+#   1:  pathname
+# Returns:
+#   key to use in hash to specify a file-type we want
+#   undef if can't get a file-type
+
+sub get_file_type {
+    my $pathname = shift ;
+
+    return( $C_DIRECTORIES )  if ( -d "$pathname" ) ;
+    return( $C_FILES )        if ( -f "$pathname" ) ;
+    return( $C_BLOCK_SPEC )   if ( -b "$pathname" ) ;
+    return( $C_CHAR_SPEC )    if ( -c "$pathname" ) ;
+    return( $C_PIPES )        if ( -p "$pathname" ) ;
+    return( $C_SOCKETS )      if ( -S "$pathname" ) ;
+
+    # If we made it to here and it's a symlink,
+    # then it must be unsatisfied
+    return( $C_SYMLINKS )     if ( -l "$pathname" ) ;
+
+    return( undef ) ;
+}
+
+
+# process a list of directories
+#
+# Note that we turn off perlcritic complaining about it having
+# a "high complexity score (31)" - which is greater than the default
+# of 20 at Level 3 (harsh).
+# ie:  "perlcritic --harsh lc.plx" will now pass with this exception.
+#
+# Args:
+#   1:  reference to array of directories we are interested in
+#   2:  reference to hash of file-types we are interested in
+#   3:  deference to hash of options set on command-line
+# Returns:
+#   0:  if something printed or would have printed if -n not given
+#   1:  nothing printed or would have printed
+
+sub process_dirs {   ## no critic (ProhibitExcessComplexity)
+    my $dirs_ref          = shift ;
+    my $print_flags_ref   = shift ;
+    my $options_ref       = shift ;
+
+    my $i_am = (caller(0))[3] ;
+
+    # set some short-cut flags
+
+    my $print_all_flag    = ${$options_ref}{ $C_FLAG_PRINT_EVERYTHING } ;
+    my $one_per_line_flag = ${$options_ref}{ $C_FLAG_ONE_PER_LINE  } ;
+    my $ok_to_print_flag  = 1 - ${$options_ref}{ $C_FLAG_DONT_PRINT_ANYTHING } ;
+
+    my %file_list = (
+        $C_DIRECTORIES => [],
+        $C_FILES       => [],
+        $C_PIPES       => [],
+        $C_BLOCK_SPEC  => [],
+        $C_CHAR_SPEC   => [],
+        $C_SYMLINKS    => [],
+        $C_SOCKETS     => [],
+    ) ;
+
+    my %file_titles = (
+        $C_DIRECTORIES => "Directories",
+        $C_FILES       => "Files",
+        $C_PIPES       => "Pipes",
+        $C_BLOCK_SPEC  => "Block Spec. Files",
+        $C_CHAR_SPEC   => "Char. Spec. Files",
+        $C_SYMLINKS    => "Unsatisfied Symbolic Links",
+        $C_SOCKETS     => "Sockets",
+    ) ;
+
+    # order of file types we want printed
+    my @file_type_order = ( $C_DIRECTORIES,     $C_FILES,       $C_PIPES,
+                             $C_BLOCK_SPEC,     $C_CHAR_SPEC,   $C_SYMLINKS,
+                             $C_SOCKETS,
+    ) ;
+
+    my $fcounter = 0 ;    # non-zero if something would print
+    my $indent   = "" ;   # indent if multiple directories given
+
+    my @dirs = @{$dirs_ref} ;
+    my $num_entries = @dirs ;
+    if ( $num_entries > 1 ) {
+        $indent = "    " ;
+    }
+
+    my $term_width   = get_term_width() ;
+    my $column_width = get_column_width() ;
+
+    # We indent if printing multiple directories.
+    # Account for that
+    $term_width -= length( $indent ) ;
+
+    my $column_count = 0 ;
+    foreach my $dir ( @dirs ) {
+        if ( ! opendir( DIR, "$dir" )) {
+            error( "cannot open $dir: $!", $C_WARNING ) ;
+            next ;
+        }
+        $column_count++ ;
+
+        # zero out our lists
+        foreach my $file_type ( @file_type_order ) {
+            @{$file_list{ $file_type }} = () ;
+        }
+
+        while ( my $f = readdir( DIR )) {
+            if ( $print_all_flag == 0 ) {
+                next if ( $f eq "." ) ;
+                next if ( $f eq ".." ) ;
+            }
+            my $pathname = File::Spec->catfile( "$dir", "$f" ) ;
+
+            my $f_type = get_file_type( $pathname ) ;
+            if ( defined( $f_type )) {
+                # see if we even want this filetype
+                my $want = ${$print_flags_ref}{ $f_type } ;
+                if ( $want ) {
+                    push( @{$file_list{ $f_type }}, $f ) ;
+                }
+            }
+        }
+        closedir( DIR ) ;
+
+        if (( $num_entries > 1 ) and $ok_to_print_flag ) {
+            print "${dir}:\n" ;
+        }
+
+        my $printed_something = 0 ;
+        foreach my $file_type ( @file_type_order ) {
+            # see if we want this filetype
+            my $want = ${$print_flags_ref}{ $file_type } ;
+            next if ( $want == 0 ) ;
+
+            # if we found some stuff for this filetype
+            my $title = $file_titles{ $file_type } ;
+            my $size = @{$file_list{ $file_type }} ;
+            next if ( $size == 0 ) ;
+
+            # print any line separator and title
+
+            if ( $ok_to_print_flag ) {
+                print "\n" if ( $printed_something ) ;
+                if ( $one_per_line_flag == 0 ) {
+                    print "${indent}${title}:\n" ;
+                }
+            }
+            $printed_something++ ;
+
+            # now ready to start printing a line
+
+            my $print_line = "" ;
+            my $print_line_len = 0 ;
+
+            foreach my $item ( sort( @{$file_list{ $file_type }} )) {
+                if ( $one_per_line_flag ) {
+                    print "$item\n" if ( $ok_to_print_flag );
+                    $fcounter++ ;
+                    next ;
+                }
+
+                my $item_len = length( $item ) ;
+                $print_line_len = length( $print_line ) ;
+
+                if ((( $print_line_len + $item_len ) < $term_width ) and
+                (( $term_width - $print_line_len ) > $column_width )) {
+                    # we have room to add to this line
+                    $print_line .= $item ;      # add item to what we have
+                } else {
+                    # no room to add more.  print the line and reset
+                    $print_line =~ s/ \s+ $ //x ;   # strip trailing spaces
+                    print "$indent$print_line\n" if ( $ok_to_print_flag ) ;
+
+                    $print_line = $item ;       # set our new column
+                    $fcounter++ ;
+                }
+
+                # add on the spaces we need to fill the column
+                my $num_columns = int( $item_len / $column_width ) + 1  ;
+                my $num_spaces = ( $num_columns * $column_width ) - $item_len ;
+                $print_line .= ' ' x $num_spaces ;
+            }
+
+            # print last lingering data collected
+            if ( $print_line ne "" ) {
+                $print_line =~ s/ \s+ $ //x ;        # strip trailing spaces
+                print "$indent$print_line\n" if ( $ok_to_print_flag ) ;
+                $fcounter++ ;
+            }
+        }
+        if (( $column_count < $num_entries ) and ( $ok_to_print_flag )) {
+            print "\n" ;
+        }
+    }
+    return(0) if ( $fcounter ) ;    # OK if something printed or would print
+    return(1) ;
+}
+
+
+# Get the terminal width
+#
+# Args:
+#   none
+# Returns:
+#   terminal width.  default to 80
+
+sub get_term_width {
+    my $term_width = 80 ;
 
     # want to search for some modules at runtime instead of compile time
     # If we do a "use <module>;" and it doesn't exist, our program
@@ -70,132 +451,36 @@ sub main {
     ) ;
     my $got_things_we_need = load_modules( \@things_we_need ) ;
 
-    my @directories         = () ;
-    my @files               = () ;
-    my @pipes               = () ;
-    my @block_spec          = () ;
-    my @char_spec           = () ;
-    my @unsatisfied         = () ;
-    my @sockets             = () ;
-
-    my @things    = (
-        \@directories,
-        \@files,
-        \@pipes,
-        \@block_spec,
-        \@char_spec,
-        \@unsatisfied,
-        \@sockets,
-    ) ;
-
-    my @things_title = (
-        "Directories:\n",
-        "Files:\n",
-        "Pipes:\n",
-        "Block Spec. Files:\n",
-        "Char. Spec. Files:\n",
-        "Unsatisfied Symbolic Links:\n",
-        "Sockets:\n",
-    ) ;
-
-    # Flags OR'ed together to determine what to print.
-    # default to nothing.  Fix later if no options given
-    my $things_print_flags = 0 ;
-
-    my @things_print_flag = (
-        $C_PRINT_DIRS,
-        $C_PRINT_FILES,
-        $C_PRINT_PIPES,
-        $C_PRINT_BLOCK_SPEC,
-        $C_PRINT_CHAR_SPEC,
-        $C_PRINT_SYMLINKS,
-        $C_PRINT_SOCKETS,
-    ) ;
-
-    my $one_per_line_flag      = 0 ;    # if option -1 given
-    my $print_all_flags        = 0 ;    # if option -a given
-    my $ok_to_print_flag       = 1 ;    # print if option -n NOT given
-    my $fcounter               = 0 ;    # non-zero if something would print
-    my $indent                 = "" ;   # indent if multiple directories given
-    my @directory_args         = () ;
-
-    # process options
-
-    my $num_errs = 0 ;
-    for ( my $i = 0 ; $i <= $#ARGV ; $i++ ) {
-        if (  $ARGV[ $i ] =~ /^-/ ) {
-            my $option = $ARGV[ $i ] ;
-            $option =~ s/^-// ;
-            my @options = split( //, $option ) ;
-
-            foreach my $opt ( @options ) {
-                if ( $opt eq "a" ) {
-                    # print special enties . and ..
-                    $print_all_flags++ ;
-                } elsif ( $opt eq "f" ) {
-                    # print files
-                    $things_print_flags |= $C_PRINT_FILES ;
-                } elsif ( $opt eq "d" ) {
-                    # print directories
-                    $things_print_flags |= $C_PRINT_DIRS ;
-                } elsif ( $opt eq "c" ) {
-                    # print Character special files
-                    $things_print_flags |= $C_PRINT_CHAR_SPEC ;
-                } elsif ( $opt eq "b" ) {
-                # print Block Special files
-                    $things_print_flags |= $C_PRINT_BLOCK_SPEC ;
-                } elsif ( $opt eq "p" ) {
-                    # print Named Pipes
-                    $things_print_flags |= $C_PRINT_PIPES ;
-                } elsif ( $opt eq "s" ) {
-                    # print special files (char and block )
-                    $things_print_flags = $things_print_flags |
-                        $C_PRINT_BLOCK_SPEC |
-                        $C_PRINT_CHAR_SPEC ;
-                } elsif ( $opt eq "1" ) {
-                    # print one per line
-                    $one_per_line_flag++ ;
-                } elsif ( $opt eq "n" ) {
-                    # dont print anything
-                    $ok_to_print_flag = 0 ;
-                    $one_per_line_flag++ ;
-                } elsif ( $opt eq "v" ) {
-                    print "version: $G_version\n" ;
-                    return(0) ;
-                } elsif ( $opt eq "h" ) {
-                    usage() ;
-                    return(0) ;
-                } else {
-                    error( "unknown flag: $opt", $C_WARNING ) ;
-                    $num_errs++ ;
-                }
-            }
-        } else {
-            push( @directory_args, $ARGV[ $i ] ) ;
-        }
-    }
-    return(1) if ( $num_errs ) ;
-
-    # if no specific print options were given
-    if ( $things_print_flags == 0 ) {
-        $things_print_flags = $C_PRINT_DIRS | $C_PRINT_FILES |
-            $C_PRINT_BLOCK_SPEC | $C_PRINT_CHAR_SPEC |
-            $C_PRINT_SOCKETS | $C_PRINT_SYMLINKS | $C_PRINT_PIPES ;
-    }
-
-    # If no directories given, default to current directory
-    push( @directory_args, "." ) if ( @directory_args == 0 ) ;
-
-    my $num_entries = @directory_args  ;
-    if ( $num_entries > 1 ) {
-        $indent = "    " ;
-    }
-
     # check to see if STDOUT attached to terminal.
     # If so, and we loaded our optional modules ok, then
     # go get the terminal width size and use it
 
-    my $term_width = 80 ;
+    if ( $got_things_we_need ) {
+        my @term_size = () ;
+        my $fd = *STDOUT ;
+        if ( IO::Interactive::is_interactive( $fd ) ) {
+            @term_size = Term::ReadKey::GetTerminalSize( $fd ) ;
+        }
+        if ( @term_size != 0 ) {
+            $term_width = $term_size[0] ;
+        }
+    }
+    return( $term_width ) ;
+}
+
+
+# get the column width we want to use
+#
+# The default is $C_COLUMN_SIZE, to which we add 1 for a separator space.
+# But the user can over-ride the width by setting the environment variable
+# LC_COLUMN_WIDTH
+#
+# Args:
+#   none
+# Returns:
+#   column width.  default = $C_COLUMN_SIZE + 1
+
+sub get_column_width {
     my $column_width = $C_COLUMN_SIZE + 1 ;   # default
 
     # see if we want a different column width via an environment variable
@@ -206,7 +491,7 @@ sub main {
         if ( $width eq "" ) {
             error( "environment variable $LCW is an empty string", $C_FATAL ) ;
         }
-        if ( $width !~ /^\d+$/ ) {
+        if ( $width !~ / ^ \d+ $ /x ) {
             my $err = "environment variable $LCW contains non-digits: '$width'" ;
             error( $err, $C_FATAL ) ;
         }
@@ -217,139 +502,7 @@ sub main {
         }
         $column_width = $width + 1 ;    # +1 for space separator
     }
-
-    if ( $got_things_we_need ) {
-        my @term_size = () ;
-        my $fd = *STDOUT ;
-        if ( IO::Interactive::is_interactive($fd) ) {
-            @term_size = Term::ReadKey::GetTerminalSize $fd ;
-        }
-        if ( @term_size != 0 ) {
-            $term_width = $term_size[0] ;
-        }
-    }
-
-    # We indent if printing multiple directories.
-    # Account for that
-    $term_width -= length( $indent ) ;
-
-    my $column_count = 0 ;
-    foreach my $dir ( @directory_args ) {
-        if ( opendir( DIR, "$dir" )) {
-            $column_count++ ;
-
-            @directories    = () ;
-            @files          = () ;
-            @pipes          = () ;
-            @block_spec     = () ;
-            @char_spec      = () ;
-            @unsatisfied    = () ;
-            @sockets        = () ;
-
-            while ( my $f = readdir( DIR )) {
-                if ( $print_all_flags == 0 ) {
-                    next if ( $f eq "." ) ;
-                    next if ( $f eq ".." ) ;
-                }
-                my $pathname = File::Spec->catfile( "$dir", "$f" ) ;
-                if ( -d "$pathname" ) {
-                    push( @directories, $f ) ;
-                } elsif ( -f "$pathname" ) {
-                    push( @files, $f ) ;
-                } elsif ( -S "$pathname" ) {
-                    push( @sockets, $f ) ;
-                } elsif ( -b "$pathname" ) {
-                    push( @block_spec, $f ) ;
-                } elsif ( -c "$pathname" ) {
-                    push( @char_spec, $f ) ;
-                } elsif ( -p "$pathname" ) {
-                    push( @pipes, $f ) ;
-                } else {
-                    # If we made it to here and it's a symlink,
-                    # then it must be unsatisfied
-                    if ( -l "$pathname" ) {
-                        push( @unsatisfied, $f ) ;
-                    }
-                }
-            }
-            closedir( DIR ) ;
-
-            print "${dir}:\n" if ( $num_entries > 1 ) ;
-
-            my $index = 0 ;
-            my $printed_something = 0 ;
-            foreach my $thing ( @things ) {
-                $index++ ;
-                # see if we want this filetype
-
-                my $pr_flag = $things_print_flag[ $index-1 ] ;
-                next if (( $things_print_flags & $pr_flag ) != $pr_flag );
-
-                # if we found some stuff for this filetype
-
-                my $size = @$thing ;
-                if ( $size ) {
-                    if ( $ok_to_print_flag ) {
-                        if ( $one_per_line_flag == 0 ) {
-                            print "\n" if ( $printed_something ) ;
-                            print "$indent$things_title[ $index-1 ]" ;
-                        } else {
-                            print "\n" if ( $printed_something ) ;
-                        }
-                    }
-                    $printed_something++ ;
-
-                    my $print_line = "" ;
-                    my $print_line_len = 0 ;
-
-                    foreach my $item ( sort( @$thing )) {
-                        if ( $one_per_line_flag ) {
-                            print "$item\n" if ( $ok_to_print_flag );
-                            $fcounter++ ;
-                            next ;
-                        }
-
-                        my $item_len = length( $item ) ;
-                        $print_line_len = length( $print_line ) ;
-
-                        if ((( $print_line_len + $item_len ) < $term_width ) and
-                        (( $term_width - $print_line_len ) > $column_width )) {
-
-                            # we have room to add to this line
-                            $print_line .= $item ;      # add item to what we have
-                        } else {
-                            # no room to add more.  print the line and reset
-                            $print_line =~ s/\s+$// ;   # strip trailing spaces
-                            print "$indent$print_line\n" ;
-
-                            $print_line = $item ;       # set our new column
-                            $fcounter++ ;
-                        }
-
-                        # add on the spaces we need to fill the column
-                        my $num_columns = int( $item_len / $column_width ) + 1  ;
-                        my $num_spaces = ( $num_columns * $column_width ) - $item_len ;
-                        $print_line .= ' ' x $num_spaces ;
-                    }
-
-                    # print last lingering data collected
-                    if ( $print_line ne "" ) {
-                        $print_line =~ s/\s+$// ;        # strip trailing spaces
-                        print "$indent$print_line\n" ;
-                        $fcounter++ ;
-                    }
-                }
-            }
-        } else {
-            error( "no such file or directory: $dir", $C_WARNING ) ;
-            next ;
-        }
-        if (( $column_count < $num_entries ) and ( $ok_to_print_flag )) {
-            print "\n" ;
-        }
-    }
-    return(0) if ( $fcounter ) ;    # OK if something printed or would print
-    return(1) ;
+    return( $column_width ) ;
 }
 
 
@@ -360,8 +513,6 @@ sub main {
 # Returns:
 #   1:  success
 #   0:  was not able to load some of the modules
-# Globals:
-#   none
 
 sub load_modules {
     my $modules_ref = shift ;
@@ -370,7 +521,7 @@ sub load_modules {
     my $modules_we_need  = @{$modules_ref} ;
 
     foreach my $thing ( @${modules_ref} ) {
-        my @parts = split( /::/, $thing ) ;
+        my @parts = split( / :: /x, $thing ) ;
         $parts[-1] .= ".pm" ;
 
         my $found = 0 ;
@@ -417,6 +568,21 @@ sub error {
 }
 
 
+# Print our version
+#
+# Args:
+#   none
+# Returns:
+#   0
+# Globals:
+#   $G_version
+
+sub print_version {
+    print "version: $G_version\n" ;
+    return(0) ;
+}
+
+
 # print the usage
 #
 # Args:
@@ -439,11 +605,11 @@ sub usage {
         "    p    list permanent pipes\n" .
         "    s    list all special files\n" .
         "    v    print version and exit ($G_version)\n" .
-        "    1    print 1 entry per line\n" ;
+        "    1    print 1 entry per line\n" .
+        "    S    list sockets\n" ;
 
     return(0) ;
 }
-
 
 __END__
 =head1 NAME

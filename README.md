@@ -47,20 +47,24 @@ man-page is now under lc-uw.1 and is not installed with the Makefile.
        LICENSE.txt  README.md   RELEASE-NOTES    lc.1     lc.plx
 
     # options can be grouped together.  ie: -p and -b can also be given as -pb
-    server5> lc -pb /dev
+
+    server5> lc -pb -S /dev
+       Pipes:
+       initctl 
+
        Block Spec. Files:
        cdrom          cdrw           dvd            dvdrw          loop0
        loop1          loop2          loop3          loop4          loop5
        loop6          loop7          md127          sda            sda1
        sdb            sdb1           sdc            sdc1           sdd
        sdd1           sdd2           sdd5           sr0            
-    
-       Pipes:
-       initctl 
+
+       Sockets:
+       log
 
     # usage (help option)
     server5> lc -h
-       usage: [ -option ]* [ directory ]*
+       usage: lc [ -option ]* [ directory ]*
            a    print special entries as well (. and ..)
            b    list block special files
            c    list character special files
@@ -70,5 +74,6 @@ man-page is now under lc-uw.1 and is not installed with the Makefile.
            n    turn off all output
            p    list permanent pipes
            s    list all special files
-           v    print version and exit
+           v    print version and exit (v0.9)
            1    print 1 entry per line
+           S    list sockets

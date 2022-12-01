@@ -42,6 +42,9 @@ list all special files - character and block special files
 .TP
 \fB\-v\fR
 show version of program
+.TP
+\fB\-S\fR
+list sockets
 .SH EXAMPLES
 .TP
 lc -cb /dev
@@ -86,10 +89,13 @@ list block special files
 list character special files
 .TP
 .B s
-list all special files
+list all special files (block and character special files)
 .TP
 .B p
 list permanent pipes
+.TP
+.B S
+list sockets
 .RE
 .PP
 If you use the -1 (One, not L), it will list one entry per line.  To be
